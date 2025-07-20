@@ -90,3 +90,45 @@ Sample Request Body:
     "Subject": "Global Sync for Q3 Planning",
     "EmailContent": "Hi team, let's connect for our Q3 planning session. Can we meet for an hour sometime next week?"
 }
+
+### Response Format
+
+The API returns a structured JSON response with:
+
+- Meeting details (subject, duration, attendee emails)
+- Proposed time slot with start and end times (if available)
+- Attendee calendar information
+- Conflict resolution details (if applicable)
+- Metadata about the scheduling status
+
+## System Architecture
+
+The assistant follows a graph-based workflow:
+
+1. **Initialize State**: Gather user timezone information
+2. **Extract Details**: Parse the email with LLM to understand meeting requirements
+3. **Search for Slots**: Find available time slots across the requested date range
+4. **Conflict Resolution**: If no slots are available, analyze conflicts and suggest alternatives
+5. **Format Response**: Generate the final structured output
+
+## Advanced Features
+
+### Conflict Resolution
+
+When scheduling conflicts arise, the system:
+
+1. Classifies conflicting meetings as "reschedulable," "negotiable," or "immovable"
+2. Calculates a reschedulability score for each conflict
+3. Determines the priority of the requested meeting
+4. Generates negotiation strategies and alternative suggestions
+5. Creates professionally-worded negotiation messages
+
+### Multi-day Search
+
+The system efficiently searches across multiple days by:
+
+1. Extracting date ranges from natural language (e.g., "next week")
+2. Iterating through business days in the range
+3. Finding the earliest available slot that works for all attendees
+4. Falling back to conflict resolution when needed
+
