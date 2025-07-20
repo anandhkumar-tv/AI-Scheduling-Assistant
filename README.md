@@ -14,126 +14,79 @@ The AI Scheduling Assistant is a sophisticated system that can:
 
 The system leverages LangChain, LangGraph, and local LLMs (specifically Llama 3.1) to create an agentic workflow that handles the entire scheduling process.
 
-## Features
+## 🛠️ Core Architecture
 
-- **Natural Language Understanding**: Interprets meeting requests from email content
-- **Multi-day Search**: Searches for available slots across date ranges (e.g., "next week")
-- **Time Zone Aware**: Handles attendees in different time zones
-- **Conflict Resolution**: Analyzes calendar conflicts and proposes rescheduling options
-- **Priority-based Scheduling**: Evaluates meeting importance and suggests priority overrides when needed
-- **Google Calendar Integration**: Fetches real calendar data from attendees
+This solution was built using a modern, professional AI engineering stack designed for creating robust and scalable agents.
 
-## Installation
+*   **Agentic Framework - LangGraph:** The heart of the solution is a stateful agent built with LangGraph. This allows for complex, cyclical reasoning—if a conflict is found, the agent can loop, find alternatives, and re-evaluate, perfectly mimicking a human thought process.
 
-### Prerequisites
+*   **High-Performance NLU - Llama 3.1 & vLLM:** Natural Language Understanding is powered by Meta's Llama 3.1-8B-Instruct model, served via the high-throughput vLLM inference server on the MI300 GPU. This ensures fast and accurate extraction of user intent.
 
-- Python 3.9+
-- Access to a vLLM server running Llama 3.1
-- Google Calendar API credentials
+*   **Data Integrity - Pydantic:** All data structures, especially the agent's state, are defined and validated using Pydantic. This eliminates an entire class of runtime errors and ensures data consistency throughout the workflow.
 
-### Setup
+*   **Advanced Capability - Multi-Timezone Intelligence:** The agent's `find_available_slots` tool is designed to solve the difficult problem of scheduling for global teams. It performs the following logic:
+    1.  Identifies the local timezone of each attendee (e.g., India, UK, US).
+    2.  Calculates the standard working hours (9 AM - 6 PM) for each person in their local time.
+    3.  Converts all local work-hour windows to a universal standard (UTC).
+    4.  Calculates the **intersection** of all these UTC windows to find the "Golden Window" when everyone is at their desk.
+    5.  Searches for an open meeting slot *only within this Golden Window*, ensuring a proposed time is reasonable for all participants.
 
-1. Install the required dependencies:
+---
 
-```bash
-pip install -q --upgrade \
-    langchain \
-    langchain-core \
-    langchain-community \
-    langgraph \
-    langsmith \
-    langchain-openai \
-    dateparser \
-    pytz \
-    google-api-python-client \
-    google-auth-oauthlib \
-    requests \
-    flask
-```
+## ⚙️ Setup and Execution Guide
 
-2. Place Google Calendar API credentials in the `IISc_Google_Calendar_Keys/` directory
+Follow these steps to run the AI Scheduling Assistant.
 
-3. Configure the LLM server URL and model path in the notebook (Cell 2)
+### 1. Prerequisites
+- Ensure you have access to the MI300 GPU Instance.
+- Clone the project repository. Ensure the `Keys/` directory is present and contains valid Google Calendar tokens for `userone.amd@gmail.com`, `usertwo.amd@gmail.com`, and `userthree.amd@gmail.com`.
 
-## Usage
+### 2. Start the vLLM Server
+Open a new terminal in the Jupyter Lab environment and launch the Llama 3.1 model. Wait for the `Application startup complete.` message before proceeding.
 
-### Starting the Server
+HIP_VISIBLE_DEVICES=0 vllm serve Models/meta-llama/Meta-Llama-3.1-8B-Instruct \
+        --gpu-memory-utilization 0.9 \
+        --swap-space 16 \
+        --disable-log-requests \
+        --dtype float16 \
+        --max-model-len 2048 \
+        --tensor-parallel-size 1 \
+        --host 0.0.0.0 \
+        --port 4000 \
+        --distributed-executor-backend "mp"
 
-1. Run the Jupyter notebook cells sequentially
-2. The Flask server will start in a background thread on port 5000
 
-### API Endpoint
 
-Send POST requests to `/receive` with JSON payloads in this format:
+3. Run the Submission Notebook
+Open the Submission.ipynb notebook.
+Run all cells from top to bottom.
+Cell 0 will install any necessary Python dependencies. You must restart the kernel after this cell completes.
+Cells 1-7 define the agent's architecture, tools, and the Flask API.
+Cell 8 starts the Flask server in the background. The server will be listening for requests on port 5000.
+The subsequent cells will run a comprehensive suite of tests, proving the agent's functionality.
 
-```json
+
+📡 API Endpoint for Testing
+The agent is exposed via a POST request to the /receive endpoint.
+Method: POST
+URL: http://<YOUR_INSTANCE_IP>:5000/receive
+(Find your instance's public IP address in the startup log of the Flask server in Cell 8)
+Headers: Content-Type: application/json
+Body (raw JSON): Provide the input JSON in the specified format.
+
+
+
+Sample Request Body:
+
 {
-    "Request_id": "unique-request-id",
-    "Datetime": "2025-07-18T14:00:00Z",
-    "Location": "Virtual / Global Call",
-    "From": "organizer@example.com",
+    "Request_id": "api-test-001",
+    "Datetime": "2025-07-21T10:00:00Z",
+    "Location": "Virtual / Cross-Timezone",
+    "From": "userone.amd@gmail.com",
     "Attendees": [
-        {"email": "attendee1@example.com"},
-        {"email": "attendee2@example.com"}
+        {"email": "usertwo.amd@gmail.com"},
+        {"email": "userthree.amd@gmail.com"}
     ],
-    "Subject": "Meeting Subject",
-    "EmailContent": "Natural language meeting request goes here."
+    "Subject": "Global Sync for Q3 Planning",
+    "EmailContent": "Hi team, let's connect for our Q3 planning session. Can we meet for an hour sometime next week?"
 }
-```
-
-### Response Format
-
-The API returns a structured JSON response with:
-
-- Meeting details (subject, duration, attendee emails)
-- Proposed time slot with start and end times (if available)
-- Attendee calendar information
-- Conflict resolution details (if applicable)
-- Metadata about the scheduling status
-
-## System Architecture
-
-The assistant follows a graph-based workflow:
-
-1. **Initialize State**: Gather user timezone information
-2. **Extract Details**: Parse the email with LLM to understand meeting requirements
-3. **Search for Slots**: Find available time slots across the requested date range
-4. **Conflict Resolution**: If no slots are available, analyze conflicts and suggest alternatives
-5. **Format Response**: Generate the final structured output
-
-## Advanced Features
-
-### Conflict Resolution
-
-When scheduling conflicts arise, the system:
-
-1. Classifies conflicting meetings as "reschedulable," "negotiable," or "immovable"
-2. Calculates a reschedulability score for each conflict
-3. Determines the priority of the requested meeting
-4. Generates negotiation strategies and alternative suggestions
-5. Creates professionally-worded negotiation messages
-
-### Multi-day Search
-
-The system efficiently searches across multiple days by:
-
-1. Extracting date ranges from natural language (e.g., "next week")
-2. Iterating through business days in the range
-3. Finding the earliest available slot that works for all attendees
-4. Falling back to conflict resolution when needed
-
-## Testing
-
-The notebook includes a comprehensive test suite with scenarios like:
-- All attendees available
-- Specific attendees busy
-- All attendees busy
-- Priority-based scheduling decisions
-
-## License
-
-[Insert appropriate license information]
-
-## Contributing
-
-[Insert contribution guidelines if applicable]
